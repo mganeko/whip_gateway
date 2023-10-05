@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>WHIP Direct</title>
+</head>
+<body>
+  <div>
+    WebRTC HTTP Injestion Protocol Direct
+  </div>
+  <br />
+  <div>
+    WHIP Endpoint: <input type="text" id="whip_endpoint" size="60" value="" /><br />
+    Auth Token: <input type="text" id="auth_token" size="40" value="" /><br />
+    WHIP Resouce: <input type="text" id="whip_recource" size="60" value="" readonly/><br />
+  </div>
+  <br />
+  <div>
+    <input type="checkbox" id="use_audio_check" checked>use Audio</input>
+    <button id="start_video_button" onclick="startVideo()">Start Media</button>
+    <button id="stop_video_button" onclick="stopVideo()">Stop Media</button>
+    &nbsp;
+    <button id="start_peer_button" onclick="startPeer()">Connect</button>
+    <button id="stop_peer_button" onclick="stopPeer()">Disconnect</button>
+  </div>
+
+  <div>
+    <div>Publisher(Injestion)</div>
+    <video id="local_video" width="320" height="240" style="border: solid 1px black;">
+    </video>
+  </div>
+</body>
+<script>
+  let peer = null;
+  let localStream = null;
+  const localVideo = document.getElementById('local_video');
+  //const recvVideo = document.getElementById('recv_video');
+
+  function getWhipEndpoint() {
+    return document.getElementById('whip_endpoint').value;
+  }
+
+  function getAuthToken() {
+    return document.getElementById('auth_token').value;
+  }
+
+  function setWhipResouce(resource) {
+    document.getElementById('whip_recource').value = resource;
+  }
+
+  function updateUI() {
+    if (localStream) {
+      disableElementById('use_audio_check');
+      disableElementById('start_video_button');
+      enableElementById('stop_video_button');
+    }
+    else {
+      enableElementById('use_audio_check');
+      enableElementById('start_video_button');
+      disableElementById('stop_video_button');
+    }
+
+    if (peer) {
+      disableElementById('start_peer_button');
+      enableElementById('stop_peer_button');
+      disableElementById('use_audio_check');
+      disableElementById('start_video_button');
+      disableElementById('stop_video_button');
+    }
+    else {
+      disableElementById('stop_peer_button');
+
+      if (localStream) {
+        enableElementById('start_peer_button');
+      }
+      else {
+        disableElementById('start_peer_button');
+      }
+    }
+  }
+
+
+  function enableElementById(id) {
+    const element = document.getElementById(id);
+    element.disabled = false;
+  }
+
+  function disableElementById(id) {
+    const element = document.getElementById(id);
+    element.disabled = true;
+  }
+
+  // ---- URL ----
+  function getEndpointFromUrl() {
+    const search = window.location.search;
+    const re = new RegExp('endpoint=([^&=]+)');
+    const results = re.exec(search);
+    let endpoint = '';
+    if (results) {
+      endpoint = results[1];
+    }
+    return endpoint;
+  }
+
+  function getTokenFromUrl() {
+    const search = window.location.search;
+    const re = new RegExp('token=([^&=]+)');
+    const results = re.exec(search);
+    let token = '';
+    if (results) {
+      token = results[1];
+    }
+    return token;
+  }
+
+  function setupInputs() {
+    const token = getTokenFromUrl();
+    if (token && token.length > 0) {
+      document.getElementById('auth_token').value = token;
+    }
+
+    const endpoint = getEndpointFromUrl();
+    if (endpoint && endpoint.length > 0) {
+      document.getElementById('whip_endpoint').value = endpoint;
+    }
+  }
+
+
+  function startVideo() {
+    console.log('startVideo()');
+    const useAudio = getUseAudio();
+
+    //const constraints = { video: true, audio: useAudio };
+    //const constraints = { video: { width: 1280, height: 720 }, audio: useAudio };
+    const constraints = { video: { width: 640, height: 480 }, audio: useAudio };
+    console.log('getUserMedia constraints:', constraints);
+
+    navigator.mediaDevices.getUserMedia(constraints)
+      .then(stream => {
+        localStream = stream;
+        localVideo.srcObject = stream;
+        localVideo.muted = true;
+        localVideo.play().catch(err => console.error('video play ERROR:', err));
+
+        updateUI();
+      })
+      .catch(err => {
+        console.error('getUserMedia ERROR:', err);
+      });
+  }
+
+  function stopVideo() {
+    if (localVideo.srcObject) {
+      localVideo.srcObject.getTracks().forEach(track => track.stop());
+      localVideo.pause();
+      localVideo.srcObject = null;
+    }
+
+    localStream = null;
+    updateUI();
+  }
+
+  function getUseAudio() {
+    return document.getElementById('use_audio_check').checked;
+  }
+
+  async function startPeer() {
+    if (peer) {
+      console.warn('peer already exists.');
+      return;
+    }
+    if (! localStream) {
+      console.error('no local stream, please start video.');
+      return;
+    }
+
+    const options = {
+      // "iceServers": [
+      //   {"urls": "stun:stun.webrtc.ecl.ntt.com:3478" },
+      //   {"urls": "stun:stun.l.google.com:19302" },
+      // ],
+      bundlePolicy: "max-bundle",
+    }
+    peer = new RTCPeerConnection(options);
+    updateUI();
+
+    // -- event handler --
+    peer.onicecandidate = async evt => {
+      if (evt.candidate) {
+        console.log(evt.candidate);
+      } else {
+        console.log('empty ice event. SDP ready to send');
+        const sdp = await peer.localDescription;
+ 
+        // // --- send sdp ---
+        // console.log('--- sending sdp with WHIP---');
+        // await sendWHIP(sdp.sdp);
+      }
+    }
+    peer.onconnectionstatechange = evt => {
+      console.log('peer connectionStateChange:', evt);
+    }
+    peer.onsignalingstatechange = evt => {
+      console.log('peer signalingStateChange:', evt);
+    }
+
+
+
+    // --- set stream --
+    // localStream.getTracks().forEach(track => {
+    //   const sender = peer.addTrack(track, localStream);
+    // });
+
+    // -- set auido track -- (for sora-labo, audio first)
+    localStream.getAudioTracks().forEach(track => {
+      const sender = peer.addTrack(track, localStream);
+    });
+
+    // -- set video track -- (for sora-labo)
+    localStream.getVideoTracks().forEach(track => {
+      const sender = peer.addTrack(track, localStream);
+    });
+
+    // // -- set auido track -- (test: audio after)
+    // localStream.getAudioTracks().forEach(track => {
+    //   const sender = peer.addTrack(track, localStream);
+    // });
+
+
+    const trs = peer.getTransceivers();
+    trs.forEach(transceiver => {
+      transceiver.direction = 'sendonly';
+      if (transceiver.sender.track.kind === 'video') {
+        console.log('---- video track transeiver ----');
+        //checkSenderParams(transceiver.sender);
+        setupVideoCodecs(transceiver);
+      }
+      else if(transceiver.sender.track.kind === 'audio') {
+        console.log('---- audio track transeiver ----');
+        //checkSenderParams(transceiver.sender);
+        setupAudioCodecs(transceiver);
+      }
+      else {
+        console.warn('unknown track');
+      }
+    });
+
+    // --- create offer ---
+    const offer = await peer.createOffer();
+    console.log('createOffer() succsess. offer:,', offer);
+    console.log(offer.sdp);
+    await peer.setLocalDescription(offer);
+
+    // --- wait to complete ICE candidate ---
+    const desc = await waitToCompleteICEGathering(peer);
+    console.log('waitToCompleteICEGathering() succsess. local SDP:', desc.sdp);
+    
+    // --- send sdp ---
+    console.log('--- sending sdp with WHIP---');
+    await sendWHIP(desc.sdp);
+  }
+
+  // refer cloudflare example
+  // https://github.com/cloudflare/workers-sdk/blob/main/templates/stream/webrtc/src/negotiateConnectionWithClientOffer.js
+  async function waitToCompleteICEGathering(peerConnection) {
+    return new Promise((resolve) => {
+      /** Wait at most 1 second for ICE gathering. */
+      setTimeout(function () {
+        resolve(peerConnection.localDescription);
+      }, 1000);
+      peerConnection.onicegatheringstatechange = (ev) =>
+        peerConnection.iceGatheringState === "complete" &&
+        resolve(peerConnection.localDescription);
+    });
+  }
+
+
+  function setupVideoCodecs(transceiver) {
+    if (transceiver.sender.track.kind === 'video') {
+      const codecs = RTCRtpSender.getCapabilities('video').codecs;
+      console.log('codecs:', codecs);
+
+      // コーデックをフィルタする
+      const h264Codecs = codecs.filter(codec => codec.mimeType == "video/H264");
+      console.log('h264Codecs:', h264Codecs);
+
+      // --- use H.264 ---
+      transceiver.setCodecPreferences(h264Codecs); // NOT supported in Firefox
+  
+      /*--
+      // -use 1st H.264 only --
+      const h264Codec1 = [];
+      h264Codec1.push(h264Codecs[0]); // OK
+      //h264Codec1.push(h264Codecs[1]); // ERROR:  Failed to set remote answer sdp: The order of m-lines in answer doesn't match order in offer. Rejecting answer.
+      //h264Codec1.push(h264Codecs[2]); // ERROR
+      // h264Codec1.push(h264Codecs[3]); // ERROR
+
+      // // --- OK ---
+      // h264Codec1.push(h264Codecs[0]); 
+      // h264Codec1.push(h264Codecs[1]);
+      
+      console.log('h264Codec1:', h264Codec1);
+      transceiver.setCodecPreferences(h264Codec1);  // NOT supported in Firefox
+      ---*/
+    }
+    else {
+      console.warn('NOT video track');
+    }
+  }
+
+  function checkSenderParams(sender) {
+    const params = sender.getParameters();
+    console.log('sender params:', params);
+  }
+
+
+  function setupAudioCodecs(transceiver) {
+    if (transceiver.sender.track.kind === 'audio') {
+      const codecs = RTCRtpSender.getCapabilities('audio').codecs;
+      console.log('codecs:', codecs);
+
+      // コーデックをフィルタする
+      const opusCodecs = codecs.filter(codec => codec.mimeType == "audio/opus");
+      console.log('opusCodecs:', opusCodecs);
+
+      // --- use Opus ---
+      transceiver.setCodecPreferences(opusCodecs);
+
+      /*---
+      // --- use 1st Opus only ---
+      const opusCodecs1 = [];
+      opusCodecs1.push(opusCodecs[0]);
+      console.log('opusCodecs1:', opusCodecs1);
+      transceiver.setCodecPreferences(opusCodecs1);
+      ---*/
+    }
+    else {
+      console.warn('NOT audio track');
+    }
+  }
+
+
+  // ======== WHIP ========
+
+  // -- for node server --
+  //const URL_GATEWAY = 'http://localhost:3000/whipgw';
+  //const URL_GATEWAY = '/whipgw';
+
+
+  let whipResource;
+
+  async function sendWHIP(sdp) {
+    const endpoint = getWhipEndpoint();
+    const token = getAuthToken();
+
+    const headers = new Headers();
+    const opt = {};
+    headers.set("Content-Type", "application/sdp");
+    headers.set("Authorization", 'Bearer ' + token);
+    //headers.set("X-Whip-Endpoint", endpoint);
+ 
+    opt.method = 'POST';
+    opt.headers = headers;
+    opt.body = sdp;
+    opt.keepalive = true;
+    opt.mode = 'no-cors'; 
+
+    const res = await fetch(endpoint, opt)
+    .catch(e => {
+      console.error(e);
+      return {
+        role: 'error',
+        content: 'Network ERROR, Please try again.',
+      };
+    });
+
+    console.log('WHIP response:', res);
+    if (res.status === 400) {
+      const s = res.headers.get("WWW-Authenticate");
+      console.log("400", s);
+    }
+    if (res.status === 401) {
+      const s = res.headers.get("WWW-Authenticate");
+      console.log("401", s);
+    }
+    if (res.status === 201) {
+      whipResource = res.headers.get("Location");
+      console.log('whipResource:', whipResource);
+      setWhipResouce(whipResource);
+      let sdp = await res.text();
+      console.log('remote sdp:', sdp);
+      let answer = new RTCSessionDescription({ type: "answer", sdp: sdp });
+      await peer.setRemoteDescription(answer);
+    }
+    if (res.status === 200) {
+      console.warn('200 OK, but not expected.');
+    }
+  }
+
+  // --- disconnect 2 peers ---
+  async function stopPeer() {
+    if (whipResource) {
+      console.log('--- disconnect ---');
+      await requestDelete(whipResource);
+      console.log('disconnect response:');
+      if (peer) {
+        peer.close();
+        peer = null;
+      }
+      whipResource = null;
+
+      updateUI();
+    }
+  }
+
+  //const URL_DELETE = 'http://localhost:3000/whipdelete';
+  //const URL_DELETE = '/whipdelete';
+  async function requestDelete(resource) {
+    const url = resource;
+    const token = getAuthToken();
+
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+      },
+    });
+  }
+
+  // ========= init UI ==========
+  updateUI();
+  setupInputs();
+</script>
+</html>
