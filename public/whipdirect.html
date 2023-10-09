@@ -356,14 +356,16 @@
     const headers = new Headers();
     const opt = {};
     headers.set("Content-Type", "application/sdp");
-    headers.set("Authorization", 'Bearer ' + token);
+    if (token && token.length > 0) {
+      headers.set("Authorization", 'Bearer ' + token);
+    }
     //headers.set("X-Whip-Endpoint", endpoint);
  
     opt.method = 'POST';
     opt.headers = headers;
     opt.body = sdp;
     opt.keepalive = true;
-    opt.mode = 'no-cors'; 
+    //opt.mode = 'no-cors'; 
 
     const res = await fetch(endpoint, opt)
     .catch(e => {

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>WHEP Direct</title>
+</head>
+<body>
+  <div>
+    WebRTC HTTP Egress Protocol Direct
+  </div>
+  <br />
+  <div>
+    WHEP Endpoint: <input type="text" id="whep_endpoint" size="60" value="" /><br />
+    Auth Token: <input type="text" id="auth_token" size="40" value="" /><br />
+    WHEP Resouce: <input type="text" id="whep_recource" size="60" value="" readonly/><br />
+  </div>
+  <br />
+  <div>
+    <button id="start_peer_button" onclick="startPeer()">Connect</button>
+    <button id="stop_peer_button" onclick="stopPeer()">Disconnect</button>
+  </div>
+
+  <div>
+    <div>Subscriber(Egress)</div>
+    <video id="remote_video" width="320" height="240" style="border: solid 1px black;">
+    </video>
+  </div>
+</body>
+<script>
+  let peer = null;
+  let mediaStream = null;
+  const remoteVideo = document.getElementById('remote_video');
+
+  function getWhepEndpoint() {
+    return document.getElementById('whep_endpoint').value;
+  }
+
+  function getAuthToken() {
+    return document.getElementById('auth_token').value;
+  }
+
+  function setWhepResouce(resource) {
+    document.getElementById('whep_recource').value = resource;
+  }
+
+  function updateUI() {
+    if (peer) {
+      disableElementById('start_peer_button');
+      enableElementById('stop_peer_button');
+    }
+    else {
+      disableElementById('stop_peer_button');
+      enableElementById('start_peer_button');
+    }
+  }
+
+
+  function enableElementById(id) {
+    const element = document.getElementById(id);
+    element.disabled = false;
+  }
+
+  function disableElementById(id) {
+    const element = document.getElementById(id);
+    element.disabled = true;
+  }
+
+  // ---- URL ----
+  function getEndpointFromUrl() {
+    const search = window.location.search;
+    const re = new RegExp('endpoint=([^&=]+)');
+    const results = re.exec(search);
+    let endpoint = '';
+    if (results) {
+      endpoint = results[1];
+    }
+    return endpoint;
+  }
+
+  function getTokenFromUrl() {
+    const search = window.location.search;
+    const re = new RegExp('token=([^&=]+)');
+    const results = re.exec(search);
+    let token = '';
+    if (results) {
+      token = results[1];
+    }
+    return token;
+  }
+
+  function setupInputs() {
+    const token = getTokenFromUrl();
+    if (token && token.length > 0) {
+      document.getElementById('auth_token').value = token;
+    }
+
+    const endpoint = getEndpointFromUrl();
+    if (endpoint && endpoint.length > 0) {
+      document.getElementById('whep_endpoint').value = endpoint;
+    }
+  }
+
+  async function startPeer() {
+    if (peer) {
+      console.warn('peer already exists.');
+      return;
+    }
+    if (! localStream) {
+      console.error('no local stream, please start video.');
+      return;
+    }
+
+    const options = {
+      // "iceServers": [
+      //   {"urls": "stun:stun.webrtc.ecl.ntt.com:3478" },
+      //   {"urls": "stun:stun.l.google.com:19302" },
+      // ],
+      bundlePolicy: "max-bundle",
+    }
+    peer = new RTCPeerConnection(options);
+    peer.addTransceiver('audio', {direction: 'recvonly'});
+    peer.addTransceiver('video', {direction: 'recvonly'});
+    updateUI();
+
+    // -- event handler --
+    peer.ontrack = function(event) {
+      console.log('-- peer.ontrack()');
+      if (! mediaStream) {
+        mediaStream = event.streams[0];
+        playMedia(mediaStream);
+      }
+    };
+
+    peer.onicecandidate = async evt => {
+      if (evt.candidate) {
+        console.log(evt.candidate);
+      } else {
+        console.log('empty ice event. SDP ready to send');
+        const sdp = await peer.localDescription;
+ 
+        // // --- send sdp ---
+        // console.log('--- sending sdp with WHIP---');
+        // await sendWHIP(sdp.sdp);
+      }
+    }
+    peer.onconnectionstatechange = evt => {
+      console.log('peer connectionStateChange. state:', peer.connectionState);
+      if (peer.connectionState === 'failed') {
+        console.log('-- connection failed --');
+        //shutdownPeer();
+        stopPeer();
+      }
+    }
+    peer.onsignalingstatechange = evt => {
+      console.log('peer signalingStateChange. state:', peer.signalingState);
+    }
+
+    // --- create offer ---
+    const offer = await peer.createOffer();
+    console.log('createOffer() succsess. offer:,', offer);
+    console.log(offer.sdp);
+    await peer.setLocalDescription(offer);
+
+    // --- wait to complete ICE candidate ---
+    const desc = await waitToCompleteICEGathering(peer);
+    console.log('waitToCompleteICEGathering() succsess. local SDP:', desc.sdp);
+    
+    // --- send sdp ---
+    console.log('--- sending sdp with WHEP ---');
+    await sendWHEP(desc.sdp);
+  }
+
+  // refer cloudflare example
+  // https://github.com/cloudflare/workers-sdk/blob/main/templates/stream/webrtc/src/negotiateConnectionWithClientOffer.js
+  async function waitToCompleteICEGathering(peerConnection) {
+    return new Promise((resolve) => {
+      /** Wait at most 1 second for ICE gathering. */
+      setTimeout(function () {
+        resolve(peerConnection.localDescription);
+      }, 1000);
+      peerConnection.onicegatheringstatechange = (ev) =>
+        peerConnection.iceGatheringState === "complete" &&
+        resolve(peerConnection.localDescription);
+    });
+  }
+
+
+  // ======== WHEP ========
+
+  // -- for node server --
+  //const URL_GATEWAY = 'http://localhost:3000/whipgw';
+  //const URL_GATEWAY = '/whipgw';
+
+
+  let whepResource;
+
+  async function sendWHIP(sdp) {
+    const endpoint = getWhepEndpoint();
+    const token = getAuthToken();
+
+    const headers = new Headers();
+    const opt = {};
+    headers.set("Content-Type", "application/sdp");
+    if (token && token.length > 0) {
+      headers.set("Authorization", 'Bearer ' + token);
+    }
+    //headers.set("X-Whip-Endpoint", endpoint);
+ 
+    opt.method = 'POST';
+    opt.headers = headers;
+    opt.body = sdp;
+    opt.keepalive = true;
+    //opt.mode = 'no-cors'; 
+
+    const res = await fetch(endpoint, opt)
+    .catch(e => {
+      console.error(e);
+      return {
+        role: 'error',
+        content: 'Network ERROR, Please try again.',
+      };
+    });
+
+    console.log('WHEP response:', res);
+    if (res.status === 400) {
+      const s = res.headers.get("WWW-Authenticate");
+      console.log("400", s);
+    }
+    if (res.status === 401) {
+      const s = res.headers.get("WWW-Authenticate");
+      console.log("401", s);
+    }
+    if (res.status === 201) {
+      whepResource = res.headers.get("Location");
+      console.log('whepResource:', whepResource);
+      setWhepResouce(whepResource);
+      let sdp = await res.text();
+      console.log('remote sdp:', sdp);
+      let answer = new RTCSessionDescription({ type: "answer", sdp: sdp });
+      await peer.setRemoteDescription(answer);
+    }
+    if (res.status === 200) {
+      console.warn('200 OK, but not expected.');
+    }
+  }
+
+  // --- disconnect 2 peers ---
+  async function stopPeer() {
+    if (whepResource) {
+      console.log('--- disconnect ---');
+      await requestDelete(whepResource);
+      console.log('disconnect response:');
+      if (peer) {
+        peer.close();
+        peer = null;
+      }
+      whepResource = null;
+
+      updateUI();
+    }
+  }
+
+  //const URL_DELETE = 'http://localhost:3000/whipdelete';
+  //const URL_DELETE = '/whipdelete';
+  async function requestDelete(resource) {
+    const url = resource;
+    const token = getAuthToken();
+
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+      },
+    });
+  }
+
+  // ========= init UI ==========
+  updateUI();
+  setupInputs();
+</script>
+</html>
