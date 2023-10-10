@@ -176,7 +176,6 @@
 
     const options = {
       // "iceServers": [
-      //   {"urls": "stun:stun.webrtc.ecl.ntt.com:3478" },
       //   {"urls": "stun:stun.l.google.com:19302" },
       // ],
       bundlePolicy: "max-bundle",
@@ -233,12 +232,12 @@
       if (transceiver.sender.track.kind === 'video') {
         console.log('---- video track transeiver ----');
         //checkSenderParams(transceiver.sender);
-        setupVideoCodecs(transceiver);
+        //setupVideoCodecs(transceiver);
       }
       else if(transceiver.sender.track.kind === 'audio') {
         console.log('---- audio track transeiver ----');
         //checkSenderParams(transceiver.sender);
-        setupAudioCodecs(transceiver);
+        //setupAudioCodecs(transceiver);
       }
       else {
         console.warn('unknown track');
@@ -341,12 +340,6 @@
 
 
   // ======== WHIP ========
-
-  // -- for node server --
-  //const URL_GATEWAY = 'http://localhost:3000/whipgw';
-  //const URL_GATEWAY = '/whipgw';
-
-
   let whipResource;
 
   async function sendWHIP(sdp) {
@@ -415,8 +408,6 @@
     }
   }
 
-  //const URL_DELETE = 'http://localhost:3000/whipdelete';
-  //const URL_DELETE = '/whipdelete';
   async function requestDelete(resource) {
     const url = resource;
     const token = getAuthToken();

@@ -2,18 +2,13 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>WHEP Direct</title>
+  <title>WHEP Gateway</title>
 </head>
 <body>
   <div>
-    WebRTC HTTP Egress Protocol Direct
+    WebRTC HTTP Egress Protocol Gateway
   </div>
-  <br />
-  <div>
-    WHEP Endpoint: <input type="text" id="whep_endpoint" size="60" value="" /><br />
-    Auth Token: <input type="text" id="auth_token" size="40" value="" /><br />
-    WHEP Resouce: <input type="text" id="whep_recource" size="60" value="" readonly/><br />
-  </div>
+  WHEP Resouce: <input type="text" id="whep_recource" size="60" value="" readonly/><br />
   <br />
   <div>
     <button id="start_peer_button" onclick="startPeer()">Connect</button>
@@ -21,27 +16,16 @@
   </div>
 
   <div>
-    <div>Subscriber(Egress)</div>
-    <video id="remote_video" width="320" height="240" style="border: solid 1px black;">
+    <div>Subscripber (Egress)</div>
+    <video id="remote_video" width="320" height="240" style="border: solid 1px black;" volume=0>
     </video>
   </div>
 </body>
 <script>
   let peer = null;
   let mediaStream = null;
-  const remoteVideo = document.getElementById('remote_video');
-
-  function getWhepEndpoint() {
-    return document.getElementById('whep_endpoint').value;
-  }
-
-  function getAuthToken() {
-    return document.getElementById('auth_token').value;
-  }
-
-  function setWhepResouce(resource) {
-    document.getElementById('whep_recource').value = resource;
-  }
+  //const localVideo = document.getElementById('local_video');
+  const remoteVideo= document.getElementById('remote_video');
 
   function updateUI() {
     if (peer) {
@@ -65,41 +49,6 @@
     element.disabled = true;
   }
 
-  // ---- URL ----
-  function getEndpointFromUrl() {
-    const search = window.location.search;
-    const re = new RegExp('endpoint=([^&=]+)');
-    const results = re.exec(search);
-    let endpoint = '';
-    if (results) {
-      endpoint = results[1];
-    }
-    return endpoint;
-  }
-
-  function getTokenFromUrl() {
-    const search = window.location.search;
-    const re = new RegExp('token=([^&=]+)');
-    const results = re.exec(search);
-    let token = '';
-    if (results) {
-      token = results[1];
-    }
-    return token;
-  }
-
-  function setupInputs() {
-    const token = getTokenFromUrl();
-    if (token && token.length > 0) {
-      document.getElementById('auth_token').value = token;
-    }
-
-    const endpoint = getEndpointFromUrl();
-    if (endpoint && endpoint.length > 0) {
-      document.getElementById('whep_endpoint').value = endpoint;
-    }
-  }
-
   async function startPeer() {
     if (peer) {
       console.warn('peer already exists.');
@@ -120,7 +69,7 @@
     // -- event handler --
     peer.ontrack = function(event) {
       console.log('-- peer.ontrack()');
-      if (! mediaStream && event.track.kind === 'video') {
+      if (! mediaStream) {
         mediaStream = event.streams[0];
         playMedia(mediaStream);
       }
@@ -132,10 +81,6 @@
       } else {
         console.log('empty ice event. SDP ready to send');
         const sdp = await peer.localDescription;
- 
-        // // --- send sdp ---
-        // console.log('--- sending sdp with WHIP---');
-        // await sendWHIP(sdp.sdp);
       }
     }
     peer.onconnectionstatechange = evt => {
@@ -161,7 +106,7 @@
     console.log('waitToCompleteICEGathering() succsess. local SDP:', desc.sdp);
     
     // --- send sdp ---
-    console.log('--- sending sdp with WHEP ---');
+    console.log('--- sending sdp with WHEP---');
     await sendWHEP(desc.sdp);
   }
 
@@ -179,31 +124,25 @@
     });
   }
 
-
   // ======== WHEP ========
-
   // -- for node server --
+  const URL = '/whepgw';
+
   let whepResource;
 
   async function sendWHEP(sdp) {
-    const endpoint = getWhepEndpoint();
-    const token = getAuthToken();
-
     const headers = new Headers();
     const opt = {};
     headers.set("Content-Type", "application/sdp");
-    if (token && token.length > 0) {
-      headers.set("Authorization", 'Bearer ' + token);
-    }
-    //headers.set("X-Whip-Endpoint", endpoint);
+    // headers.set("Authorization", 'Bearer ' + token);
+    // headers.set("X-Whip-Endpoint", endpoint);
  
     opt.method = 'POST';
     opt.headers = headers;
     opt.body = sdp;
     opt.keepalive = true;
-    //opt.mode = 'no-cors'; 
 
-    const res = await fetch(endpoint, opt)
+    const res = await fetch(URL, opt)
     .catch(e => {
       console.error(e);
       return {
@@ -217,11 +156,15 @@
       const s = res.headers.get("WWW-Authenticate");
       console.log("400", s);
     }
-    if (res.status === 401) {
+    else if (res.status === 401) {
       const s = res.headers.get("WWW-Authenticate");
-      console.log("401", s);
+      console.log("400", s);
     }
-    if (res.status === 201) {
+    else if (res.status === 404) {
+      console.log("404");
+      stopPeer();
+    }
+    else if (res.status === 201) {
       whepResource = res.headers.get("Location");
       console.log('whepResource:', whepResource);
       setWhepResouce(whepResource);
@@ -230,38 +173,61 @@
       let answer = new RTCSessionDescription({ type: "answer", sdp: sdp });
       await peer.setRemoteDescription(answer);
     }
-    if (res.status === 200) {
+    else if (res.status === 200) {
       console.warn('200 OK, but not expected.');
     }
   }
 
-  // --- disconnect 2 peers ---
+  // --- disconnect peer ---
   async function stopPeer() {
+    console.log('--- disconnect ---');
     if (whepResource) {
-      console.log('--- disconnect ---');
       await requestDelete(whepResource);
-      console.log('disconnect response:');
-      if (peer) {
-        peer.close();
-        peer = null;
-      }
       whepResource = null;
-
-      updateUI();
+      setWhepResouce('');
     }
+
+    if (peer) {
+      peer.close();
+      peer = null;
+    }
+
+    stopMedia();
+    updateUI();
   }
 
-  async function requestDelete(resource) {
-    const url = resource;
-    const token = getAuthToken();
+  // function shutdownPeer() {
+  //   console.log('--- shutdown ---');
+  //   if (peer) {
+  //     peer.close();
+  //     peer = null;
+  //   }
+  //   whepResource = null;
 
+  //   stopMedia();
+  //   updateUI();
+  // }
+
+  //const URL_DELETE = '/whepsvrdelete';
+  const URL_DELETE = '/whepdelete';
+  async function requestDelete(resource) {
+    const url = URL_DELETE;
+    const token = getAuthToken();
     const res = await fetch(url, {
-      method: 'DELETE',
       headers: {
         'Authorization': 'Bearer ' + token,
+        'X-Whip-Resource': resource,
       },
     });
   }
+
+  function setWhepResouce(resource) {
+    document.getElementById('whep_recource').value = resource;
+  }
+
+  // function encodeRresource(resource) {
+  //   return resource.replace(/\//g, '=');
+  // }
 
   function playMedia(stream) {
     console.log('playMedia()');
@@ -282,6 +248,5 @@
 
   // ========= init UI ==========
   updateUI();
-  setupInputs();
 </script>
 </html>
