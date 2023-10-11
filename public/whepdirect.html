@@ -121,6 +121,7 @@
     peer.ontrack = function(event) {
       console.log('-- peer.ontrack()');
       if (! mediaStream && event.track.kind === 'video') {
+        console.log('play remoteVideo');
         mediaStream = event.streams[0];
         playMedia(mediaStream);
       }
@@ -252,7 +253,7 @@
   }
 
   async function requestDelete(resource) {
-    const url = resource;
+    const url = buildResouceFullPath(resource);;
     const token = getAuthToken();
 
     const res = await fetch(url, {
@@ -261,6 +262,32 @@
         'Authorization': 'Bearer ' + token,
       },
     });
+  }
+
+  function hasHttpProtocol(str) {
+    const re = new RegExp('https?://');
+    const results = re.exec(str);
+    if (results) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  function buildResouceFullPath(resource) {
+    const endpoint = getWhepEndpoint();
+    if (hasHttpProtocol(resource)) {
+      return resource;
+    }
+
+    const urlObject = new URL(endpoint);
+    const protocol = urlObject.protocol;
+    const host = urlObject.host;
+    const path = urlObject.pathname;
+    const port = urlObject.port;
+    const fullResource = protocol + '//' + host + resource;
+    return fullResource;
   }
 
   function playMedia(stream) {

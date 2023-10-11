@@ -197,10 +197,10 @@
       }
     }
     peer.onconnectionstatechange = evt => {
-      console.log('peer connectionStateChange:', evt);
+      console.log('peer connectionStateChange. state:', peer.connectionState);
     }
     peer.onsignalingstatechange = evt => {
-      console.log('peer signalingStateChange:', evt);
+      console.log('peer signalingStateChange. state:', peer.signalingState);
     }
 
 
@@ -382,6 +382,8 @@
       whipResource = res.headers.get("Location");
       console.log('whipResource:', whipResource);
       setWhipResouce(whipResource);
+      parseURL(whipResource);
+
       let sdp = await res.text();
       console.log('remote sdp:', sdp);
       let answer = new RTCSessionDescription({ type: "answer", sdp: sdp });
@@ -409,7 +411,7 @@
   }
 
   async function requestDelete(resource) {
-    const url = resource;
+    const url = buildResouceFullPath(resource);
     const token = getAuthToken();
 
     const res = await fetch(url, {
@@ -418,6 +420,32 @@
         'Authorization': 'Bearer ' + token,
       },
     });
+  }
+
+  function hasHttpProtocol(str) {
+    const re = new RegExp('https?://');
+    const results = re.exec(str);
+    if (results) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  function buildResouceFullPath(resource) {
+    const endpoint = getWhipEndpoint();
+    if (hasHttpProtocol(resource)) {
+      return resource;
+    }
+
+    const urlObject = new URL(endpoint);
+    const protocol = urlObject.protocol;
+    const host = urlObject.host;
+    const path = urlObject.pathname;
+    const port = urlObject.port;
+    const fullResource = protocol + '//' + host + resource;
+    return fullResource;
   }
 
   // ========= init UI ==========
