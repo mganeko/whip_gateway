@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <title>WHIP Direct</title>
 </head>
+
 <body>
   <div>
     WebRTC HTTP Injestion Protocol Direct
@@ -12,7 +14,7 @@
   <div>
     WHIP Endpoint: <input type="text" id="whip_endpoint" size="60" value="" /><br />
     Auth Token: <input type="text" id="auth_token" size="40" value="" /><br />
-    WHIP Resouce: <input type="text" id="whip_recource" size="60" value="" readonly/><br />
+    WHIP Resouce: <input type="text" id="whip_recource" size="60" value="" readonly /><br />
   </div>
   <br />
   <div>
@@ -169,7 +171,7 @@
       console.warn('peer already exists.');
       return;
     }
-    if (! localStream) {
+    if (!localStream) {
       console.error('no local stream, please start video.');
       return;
     }
@@ -190,7 +192,7 @@
       } else {
         console.log('empty ice event. SDP ready to send');
         const sdp = await peer.localDescription;
- 
+
         // // --- send sdp ---
         // console.log('--- sending sdp with WHIP---');
         // await sendWHIP(sdp.sdp);
@@ -234,7 +236,7 @@
         //checkSenderParams(transceiver.sender);
         //setupVideoCodecs(transceiver);
       }
-      else if(transceiver.sender.track.kind === 'audio') {
+      else if (transceiver.sender.track.kind === 'audio') {
         console.log('---- audio track transeiver ----');
         //checkSenderParams(transceiver.sender);
         //setupAudioCodecs(transceiver);
@@ -253,7 +255,7 @@
     // --- wait to complete ICE candidate ---
     const desc = await waitToCompleteICEGathering(peer);
     console.log('waitToCompleteICEGathering() succsess. local SDP:', desc.sdp);
-    
+
     // --- send sdp ---
     console.log('--- sending sdp with WHIP---');
     await sendWHIP(desc.sdp);
@@ -285,7 +287,7 @@
 
       // --- use H.264 ---
       transceiver.setCodecPreferences(h264Codecs); // NOT supported in Firefox
-  
+
       /*--
       // -use 1st H.264 only --
       const h264Codec1 = [];
@@ -353,7 +355,7 @@
       headers.set("Authorization", 'Bearer ' + token);
     }
     //headers.set("X-Whip-Endpoint", endpoint);
- 
+
     opt.method = 'POST';
     opt.headers = headers;
     opt.body = sdp;
@@ -361,13 +363,13 @@
     //opt.mode = 'no-cors'; 
 
     const res = await fetch(endpoint, opt)
-    .catch(e => {
-      console.error(e);
-      return {
-        role: 'error',
-        content: 'Network ERROR, Please try again.',
-      };
-    });
+      .catch(e => {
+        console.error(e);
+        return {
+          role: 'error',
+          content: 'Network ERROR, Please try again.',
+        };
+      });
 
     console.log('WHIP response:', res);
     if (res.status === 400) {
@@ -382,7 +384,6 @@
       whipResource = res.headers.get("Location");
       console.log('whipResource:', whipResource);
       setWhipResouce(whipResource);
-      parseURL(whipResource);
 
       let sdp = await res.text();
       console.log('remote sdp:', sdp);
@@ -452,4 +453,5 @@
   updateUI();
   setupInputs();
 </script>
+
 </html>
