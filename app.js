@@ -6,7 +6,7 @@ const PORT = 3000;
 
 
 const app = express();
-app.use(bodyParser.text({type:"*/*"}));
+app.use(bodyParser.text({ type: "*/*" }));
 
 app.use(express.static('public'));
 // app.use(express.static('public', {
@@ -75,7 +75,48 @@ app.delete('/whipdelete', async (req, res) => {
   console.log('---- delete whip resource ----');
   console.log('resource:', resource);
   console.log('authorization:', authorization);
-  
+
+  // リソースを削除する処理をここに書く
+  await requestDeleteResource(resource, authorization).catch(err => {
+    console.log(err);
+    res.status(500).send('Server Error');
+  });
+
+  res.status(204).send(); // 204 No Content - リソースが削除されたことを示す
+});
+
+// -- whep gateway --
+app.post('/whepgw', async (req, res) => {
+  console.log('---- whep-gatway headers ----');
+  console.log(req.headers);
+  console.log('---- headers end ----');
+  const contentType = req.headers['content-type'];
+  const authorization = req.headers['authorization'];
+  const endpoint = req.headers['x-whep-endpoint'];
+
+  console.log('---- whep-gateway body ----');
+  console.log(req.body);
+  console.log('---- body end ----');
+  const sdpOffer = req.body;
+
+  const { sdp, location } = await postSDP(endpoint, sdpOffer, authorization).catch(err => {
+    console.log(err);
+    res.status(500).send('Server Error');
+  });
+
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Location', location);
+  res.status(201).send(sdp); // 201 Created
+});
+
+// -- whip delete gateway --
+app.delete('/whepdelete', async (req, res) => {
+  const authorization = req.headers['authorization'];
+  const resource = req.headers['x-whep-resource'];
+  console.log('---- delete whep resource ----');
+  console.log('resource:', resource);
+  console.log('authorization:', authorization);
+
   // リソースを削除する処理をここに書く
   await requestDeleteResource(resource, authorization).catch(err => {
     console.log(err);
