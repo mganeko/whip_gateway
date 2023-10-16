@@ -47,7 +47,6 @@
 
   function setWhipResouce(resource) {
     whipResource = resource;
-    //document.getElementById('whip_recource').value = resource;
   }
 
   function getWhipResoruce() {
@@ -198,10 +197,6 @@
       } else {
         console.log('empty ice event. SDP ready to send');
         const sdp = await peer.localDescription;
-
-        // // --- send sdp ---
-        // console.log('--- sending sdp with WHIP---');
-        // await sendWHIP(sdp.sdp);
       }
     }
     peer.onconnectionstatechange = evt => {
@@ -210,7 +205,6 @@
     peer.onsignalingstatechange = evt => {
       console.log('peer signalingStateChange. state:', peer.signalingState);
     }
-
 
 
     // --- set stream --
@@ -228,23 +222,15 @@
       const sender = peer.addTrack(track, localStream);
     });
 
-    // // -- set auido track -- (test: audio after)
-    // localStream.getAudioTracks().forEach(track => {
-    //   const sender = peer.addTrack(track, localStream);
-    // });
-
-
     const trs = peer.getTransceivers();
     trs.forEach(transceiver => {
       transceiver.direction = 'sendonly';
       if (transceiver.sender.track.kind === 'video') {
         console.log('---- video track transeiver ----');
-        //checkSenderParams(transceiver.sender);
         //setupVideoCodecs(transceiver);
       }
       else if (transceiver.sender.track.kind === 'audio') {
         console.log('---- audio track transeiver ----');
-        //checkSenderParams(transceiver.sender);
         //setupAudioCodecs(transceiver);
       }
       else {
@@ -264,8 +250,6 @@
 
     // --- send sdp ---
     console.log('--- sending sdp with WHIP---');
-    //await sendWHIP(desc.sdp);
-
     const endpoint = getWhipEndpoint();
     const token = getAuthToken();
     const answerSDP = await exchangeSDP(desc.sdp, endpoint, token, setWhipResouce);
@@ -312,14 +296,6 @@
       // -use 1st H.264 only --
       const h264Codec1 = [];
       h264Codec1.push(h264Codecs[0]); // OK
-      //h264Codec1.push(h264Codecs[1]); // ERROR:  Failed to set remote answer sdp: The order of m-lines in answer doesn't match order in offer. Rejecting answer.
-      //h264Codec1.push(h264Codecs[2]); // ERROR
-      // h264Codec1.push(h264Codecs[3]); // ERROR
-
-      // // --- OK ---
-      // h264Codec1.push(h264Codecs[0]); 
-      // h264Codec1.push(h264Codecs[1]);
-      
       console.log('h264Codec1:', h264Codec1);
       transceiver.setCodecPreferences(h264Codec1);  // NOT supported in Firefox
       ---*/
@@ -364,59 +340,6 @@
   // ======== WHIP ========
   let whipResource = '';
 
-  /*----
-  async function sendWHIP(sdp) {
-    const endpoint = getWhipEndpoint();
-    const token = getAuthToken();
-
-    const headers = new Headers();
-    const opt = {};
-    headers.set("Content-Type", "application/sdp");
-    if (token && token.length > 0) {
-      headers.set("Authorization", 'Bearer ' + token);
-    }
-    //headers.set("X-Whip-Endpoint", endpoint);
-
-    opt.method = 'POST';
-    opt.headers = headers;
-    opt.body = sdp;
-    opt.keepalive = true;
-    //opt.mode = 'no-cors'; 
-
-    const res = await fetch(endpoint, opt)
-      .catch(e => {
-        console.error(e);
-        return {
-          role: 'error',
-          content: 'Network ERROR, Please try again.',
-        };
-      });
-
-    console.log('WHIP response:', res);
-    if (res.status === 400) {
-      const s = res.headers.get("WWW-Authenticate");
-      console.log("400", s);
-    }
-    if (res.status === 401) {
-      const s = res.headers.get("WWW-Authenticate");
-      console.log("401", s);
-    }
-    if (res.status === 201) {
-      whipResource = res.headers.get("Location");
-      console.log('whipResource:', whipResource);
-      setWhipResouce(whipResource);
-
-      let sdp = await res.text();
-      console.log('remote sdp:', sdp);
-      let answer = new RTCSessionDescription({ type: "answer", sdp: sdp });
-      await peer.setRemoteDescription(answer);
-    }
-    if (res.status === 200) {
-      console.warn('200 OK, but not expected.');
-    }
-  }
-  ----*/
-
 
   async function exchangeSDP(sdp, endpoint, token, resourceCallback) {
     const headers = new Headers();
@@ -436,7 +359,7 @@
         console.error(e);
         return null;
       });
-    //console.log('WHIP response:', res);
+    //console.log('response:', res);
 
     if (res.status === 201) {
       resourceURL = res.headers.get("Location");
