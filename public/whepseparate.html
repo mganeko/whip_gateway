@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <title>WHEP Direct</title>
+  <script src="js/whipwhep_helper.js"></script>
 </head>
 
 <body>
@@ -47,7 +48,11 @@
   }
 
   function setWhepResouce(resource) {
-    document.getElementById('whep_recource').value = resource;
+    whepResource = resource;
+  }
+
+  function getWhepResoruce() {
+    return whepResource;
   }
 
   function updateUI() {
@@ -59,6 +64,8 @@
       disableElementById('stop_peer_button');
       enableElementById('start_peer_button');
     }
+
+    document.getElementById('whep_recource').value = whepResource;
   }
 
 
@@ -175,7 +182,21 @@
 
     // --- send sdp ---
     console.log('--- sending sdp with WHEP ---');
-    await sendWHEP(desc.sdp);
+    //await sendWHEP(desc.sdp);
+    const endpoint = getWhepEndpoint();
+    const token = getAuthToken();
+    const answerSDP = await exchangeSDP(desc.sdp, endpoint, token, setWhepResouce);
+    if (answerSDP) {
+      const answer = new RTCSessionDescription({ type: "answer", sdp: answerSDP });
+      await peer.setRemoteDescription(answer);
+    }
+    else {
+      // some error
+      peer.close();
+      peer = null;
+    }
+    updateUI();
+
   }
 
   // refer cloudflare example
@@ -196,112 +217,28 @@
   // ======== WHEP ========
 
   // -- for node server --
-  let whepResource;
+  let whepResource = '';
 
-  async function sendWHEP(sdp) {
-    const endpoint = getWhepEndpoint();
-    const token = getAuthToken();
-
-    const headers = new Headers();
-    const opt = {};
-    headers.set("Content-Type", "application/sdp");
-    if (token && token.length > 0) {
-      headers.set("Authorization", 'Bearer ' + token);
-    }
-    //headers.set("X-Whip-Endpoint", endpoint);
-
-    opt.method = 'POST';
-    opt.headers = headers;
-    opt.body = sdp;
-    opt.keepalive = true;
-    //opt.mode = 'no-cors'; 
-
-    const res = await fetch(endpoint, opt)
-      .catch(e => {
-        console.error(e);
-        return {
-          role: 'error',
-          content: 'Network ERROR, Please try again.',
-        };
-      });
-
-    console.log('WHEP response:', res);
-    if (res.status === 400) {
-      const s = res.headers.get("WWW-Authenticate");
-      console.log("400", s);
-    }
-    if (res.status === 401) {
-      const s = res.headers.get("WWW-Authenticate");
-      console.log("401", s);
-    }
-    if (res.status === 201) {
-      whepResource = res.headers.get("Location");
-      console.log('whepResource:', whepResource);
-      setWhepResouce(whepResource);
-      let sdp = await res.text();
-      console.log('remote sdp:', sdp);
-      let answer = new RTCSessionDescription({ type: "answer", sdp: sdp });
-      await peer.setRemoteDescription(answer);
-    }
-    if (res.status === 200) {
-      console.warn('200 OK, but not expected.');
-    }
-  }
-
-  // --- disconnect 2 peers ---
+  // --- disconnect peer ---
   async function stopPeer() {
-    if (whepResource) {
+    const resoruce = getWhepResoruce();
+    if (resoruce && resoruce.length > 0) {
       console.log('--- disconnect ---');
-      await requestDelete(whepResource);
+      const endpoint = getWhepEndpoint();
+      const token = getAuthToken();
+      await requestDeleteResouce(resoruce, endpoint, token);
       console.log('disconnect response:');
       if (peer) {
         peer.close();
         peer = null;
       }
-      whepResource = null;
-
+      //whepResource = null;
+      setWhepResouce('');
+      updateUI();
     }
 
     stopMedia();
     updateUI();
-  }
-
-  async function requestDelete(resource) {
-    const url = buildResouceFullPath(resource);;
-    const token = getAuthToken();
-
-    const res = await fetch(url, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': 'Bearer ' + token,
-      },
-    });
-  }
-
-  function hasHttpProtocol(str) {
-    const re = new RegExp('https?://');
-    const results = re.exec(str);
-    if (results) {
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-
-  function buildResouceFullPath(resource) {
-    const endpoint = getWhepEndpoint();
-    if (hasHttpProtocol(resource)) {
-      return resource;
-    }
-
-    const urlObject = new URL(endpoint);
-    const protocol = urlObject.protocol;
-    const host = urlObject.host;
-    const path = urlObject.pathname;
-    const port = urlObject.port;
-    const fullResource = protocol + '//' + host + resource;
-    return fullResource;
   }
 
   function playVideo(stream) {
