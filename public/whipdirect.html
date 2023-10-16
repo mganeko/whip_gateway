@@ -36,7 +36,6 @@
   let peer = null;
   let localStream = null;
   const localVideo = document.getElementById('local_video');
-  //const recvVideo = document.getElementById('recv_video');
 
   function getWhipEndpoint() {
     return document.getElementById('whip_endpoint').value;
@@ -47,7 +46,12 @@
   }
 
   function setWhipResouce(resource) {
-    document.getElementById('whip_recource').value = resource;
+    whipResource = resource;
+    //document.getElementById('whip_recource').value = resource;
+  }
+
+  function getWhipResoruce() {
+    return whipResource;
   }
 
   function updateUI() {
@@ -79,6 +83,8 @@
         disableElementById('start_peer_button');
       }
     }
+
+    document.getElementById('whip_recource').value = getWhipResoruce();
   }
 
 
@@ -258,7 +264,21 @@
 
     // --- send sdp ---
     console.log('--- sending sdp with WHIP---');
-    await sendWHIP(desc.sdp);
+    //await sendWHIP(desc.sdp);
+
+    const endpoint = getWhipEndpoint();
+    const token = getAuthToken();
+    const answerSDP = await exchangeSDP(desc.sdp, endpoint, token, setWhipResouce);
+    if (answerSDP) {
+      const answer = new RTCSessionDescription({ type: "answer", sdp: answerSDP });
+      await peer.setRemoteDescription(answer);
+    }
+    else {
+      // some error
+      peer.close();
+      peer = null;
+    }
+    updateUI();
   }
 
   // refer cloudflare example
@@ -342,8 +362,9 @@
 
 
   // ======== WHIP ========
-  let whipResource;
+  let whipResource = '';
 
+  /*----
   async function sendWHIP(sdp) {
     const endpoint = getWhipEndpoint();
     const token = getAuthToken();
@@ -394,19 +415,68 @@
       console.warn('200 OK, but not expected.');
     }
   }
+  ----*/
+
+
+  async function exchangeSDP(sdp, endpoint, token, resourceCallback) {
+    const headers = new Headers();
+    const opt = {};
+    headers.set("Content-Type", "application/sdp");
+    if (token && token.length > 0) {
+      headers.set("Authorization", 'Bearer ' + token);
+    }
+
+    opt.method = 'POST';
+    opt.headers = headers;
+    opt.body = sdp;
+    opt.keepalive = true;
+
+    const res = await fetch(endpoint, opt)
+      .catch(e => {
+        console.error(e);
+        return null;
+      });
+    //console.log('WHIP response:', res);
+
+    if (res.status === 201) {
+      resourceURL = res.headers.get("Location");
+      console.log('resource:', resourceURL);
+      if (resourceCallback) {
+        // set WHIP/WHEP resource
+        resourceCallback(resourceURL);
+      }
+      const sdp = await res.text();
+      return sdp;
+    }
+    if (res.status === 200) {
+      console.warn('200 OK, but not expected.');
+      return null;
+    }
+
+    // --- other error ---
+    if (res.status === 400) {
+      const s = res.headers.get("WWW-Authenticate");
+      console.error("400", s);
+    }
+    if (res.status === 401) {
+      const s = res.headers.get("WWW-Authenticate");
+      console.error("401", s);
+    }
+    return null;
+  }
 
   // --- disconnect 2 peers ---
   async function stopPeer() {
-    if (whipResource) {
+    const resoruce = getWhipResoruce();
+    if (resoruce && resoruce.length > 0) {
       console.log('--- disconnect ---');
-      await requestDelete(whipResource);
+      await requestDelete(resoruce);
       console.log('disconnect response:');
       if (peer) {
         peer.close();
         peer = null;
       }
-      whipResource = null;
-
+      setWhipResouce('');
       updateUI();
     }
   }
