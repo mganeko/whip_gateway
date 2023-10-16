@@ -78,7 +78,7 @@ async function exchangeSdpWithGateway(sdp, gateway, endpoint, token, resourceCal
   const headers = new Headers();
   const opt = {};
   headers.set("Content-Type", "application/sdp");
-  headers.set("X-Whip-Endpoint", endpoint);
+  headers.set("X-WhipWhep-Endpoint", endpoint);
   if (token && token.length > 0) {
     headers.set("Authorization", 'Bearer ' + token);
   }
@@ -131,7 +131,7 @@ async function requestDeleteResouceWithGatway(resource, gateway, endpoint, token
   if (token && token.length > 0) {
     headers.set("Authorization", 'Bearer ' + token);
   }
-  headers.set('X-Whip-Resource', resouceUrl);
+  headers.set('X-WhipWhep-Resource', resouceUrl);
   const res = await fetch(gateway, {
     method: 'DELETE',
     headers: headers,

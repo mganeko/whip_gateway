@@ -51,7 +51,7 @@ app.post('/whipgw', async (req, res) => {
   console.log('---- headers end ----');
   const contentType = req.headers['content-type'];
   const authorization = req.headers['authorization'];
-  const endpoint = req.headers['x-whip-endpoint'];
+  const endpoint = req.headers['x-whipwhep-endpoint'];
 
   console.log('---- whip-gateway body ----');
   console.log(req.body);
@@ -71,7 +71,7 @@ app.post('/whipgw', async (req, res) => {
 // -- whip delete gateway --
 app.delete('/whipdelete', async (req, res) => {
   const authorization = req.headers['authorization'];
-  const resource = req.headers['x-whip-resource'];
+  const resource = req.headers['x-whipwhep-resource'];
   console.log('---- delete whip resource ----');
   console.log('resource:', resource);
   console.log('authorization:', authorization);
@@ -92,7 +92,8 @@ app.post('/whepgw', async (req, res) => {
   console.log('---- headers end ----');
   const contentType = req.headers['content-type'];
   const authorization = req.headers['authorization'];
-  const endpoint = req.headers['x-whep-endpoint'];
+  //const endpoint = req.headers['x-whep-endpoint'];
+  const endpoint = req.headers['x-whipwhep-endpoint'];
 
   console.log('---- whep-gateway body ----');
   console.log(req.body);
@@ -112,7 +113,8 @@ app.post('/whepgw', async (req, res) => {
 // -- whip delete gateway --
 app.delete('/whepdelete', async (req, res) => {
   const authorization = req.headers['authorization'];
-  const resource = req.headers['x-whep-resource'];
+  //const resource = req.headers['x-whep-resource'];
+  const resource = req.headers['x-whipwhep-resource'];
   console.log('---- delete whep resource ----');
   console.log('resource:', resource);
   console.log('authorization:', authorization);

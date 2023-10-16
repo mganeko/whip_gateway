@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <title>WHEP Gateway</title>
+  <script src="js/whipwhep_helper.js"></script>
 </head>
 
 <body>
@@ -43,7 +44,12 @@
   }
 
   function setWhepResouce(resource) {
-    document.getElementById('whep_recource').value = resource;
+    //document.getElementById('whep_recource').value = resource;
+    whepResource = resource;
+  }
+
+  function getWhepResoruce() {
+    return whepResource;
   }
 
   function updateUI() {
@@ -55,8 +61,44 @@
       disableElementById('stop_peer_button');
       enableElementById('start_peer_button');
     }
+
+    document.getElementById('whep_recource').value = whepResource ?? '';
   }
 
+  // ---- URL ----
+  function getEndpointFromUrl() {
+    const search = window.location.search;
+    const re = new RegExp('endpoint=([^&=]+)');
+    const results = re.exec(search);
+    let endpoint = '';
+    if (results) {
+      endpoint = results[1];
+    }
+    return endpoint;
+  }
+
+  function getTokenFromUrl() {
+    const search = window.location.search;
+    const re = new RegExp('token=([^&=]+)');
+    const results = re.exec(search);
+    let token = '';
+    if (results) {
+      token = results[1];
+    }
+    return token;
+  }
+
+  function setupInputs() {
+    const token = getTokenFromUrl();
+    if (token && token.length > 0) {
+      document.getElementById('auth_token').value = token;
+    }
+
+    const endpoint = getEndpointFromUrl();
+    if (endpoint && endpoint.length > 0) {
+      document.getElementById('whep_endpoint').value = endpoint;
+    }
+  }
 
   function enableElementById(id) {
     const element = document.getElementById(id);
@@ -127,7 +169,22 @@
 
     // --- send sdp ---
     console.log('--- sending sdp with WHEP---');
-    await sendWHEP(desc.sdp);
+    //await sendWHEP(desc.sdp);
+    const URL_GATEWAY = '/whepgw';
+    const endpoint = getWhepEndpoint();
+    const token = getAuthToken();
+    const answerSDP = await exchangeSdpWithGateway(desc.sdp, URL_GATEWAY, endpoint, token, setWhepResouce);
+    if (answerSDP) {
+      const answer = new RTCSessionDescription({ type: "answer", sdp: answerSDP });
+      await peer.setRemoteDescription(answer);
+    }
+    else {
+      // some error
+      peer.close();
+      peer = null;
+    }
+    updateUI();
+
   }
 
   // refer cloudflare example
@@ -150,6 +207,7 @@
 
   let whepResource;
 
+  /*--
   async function sendWHEP(sdp) {
     const endpoint = getWhepEndpoint();
     const token = getAuthToken();
@@ -200,19 +258,25 @@
       console.warn('200 OK, but not expected.');
     }
   }
+  ---*/
 
   // --- disconnect peer ---
   async function stopPeer() {
-    console.log('--- disconnect ---');
-    if (whepResource) {
-      await requestDelete(whepResource);
-      whepResource = null;
-      setWhepResouce('');
-    }
+    const resoruce = getWhepResoruce();
+    if (resoruce && resoruce.length > 0) {
+      console.log('--- disconnect ---');
+      const URL_DELETE = '/whepdelete';
+      const endpoint = getWhepEndpoint();
+      const token = getAuthToken();
 
-    if (peer) {
-      peer.close();
-      peer = null;
+      await requestDeleteResouceWithGatway(whepResource, URL_DELETE, endpoint, token);
+      console.log('disconnect response:');
+      if (peer) {
+        peer.close();
+        peer = null;
+      }
+      setWhepResouce('');
+      updateUI();
     }
 
     stopMedia();
@@ -231,6 +295,7 @@
   //   updateUI();
   // }
 
+  /*--
   //const URL_DELETE = '/whepsvrdelete';
   const URL_DELETE = '/whepdelete';
   async function requestDelete(resource) {
@@ -273,10 +338,12 @@
     console.log('--fullResource:', fullResource);
     return fullResource;
   }
+  ---*/
 
-  function setWhepResouce(resource) {
-    document.getElementById('whep_recource').value = resource;
-  }
+  // function setWhepResouce(resource) {
+  //   //document.getElementById('whep_recource').value = resource;
+  //   whepResource = resource;
+  // }
 
   // function encodeRresource(resource) {
   //   return resource.replace(/\//g, '=');
@@ -301,6 +368,7 @@
 
   // ========= init UI ==========
   updateUI();
+  setupInputs();
 </script>
 
 </html>
