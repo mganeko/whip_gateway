@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <title>WHIP Gateway</title>
+  <script src="js/whipwhep_helper.js"></script>
 </head>
+
 <body>
   <div>
     WebRTC HTTP Injestion Protocol Gateway
@@ -12,7 +15,7 @@
   <div>
     WHIP Endpoint: <input type="text" id="whip_endpoint" size="60" value="" /><br />
     Auth Token: <input type="text" id="auth_token" size="40" value="" /><br />
-    WHIP Resouce: <input type="text" id="whip_recource" size="60" value="" readonly/><br />
+    WHIP Resouce: <input type="text" id="whip_recource" size="60" value="" readonly /><br />
   </div>
   <br />
   <div>
@@ -45,7 +48,12 @@
   }
 
   function setWhipResouce(resource) {
-    document.getElementById('whip_recource').value = resource;
+    //document.getElementById('whip_recource').value = resource;
+    whipResource = resource;
+  }
+
+  function getWhipResoruce() {
+    return whipResource;
   }
 
   function updateUI() {
@@ -77,6 +85,8 @@
         disableElementById('start_peer_button');
       }
     }
+
+    document.getElementById('whip_recource').value = getWhipResoruce();
   }
 
 
@@ -169,7 +179,7 @@
       console.warn('peer already exists.');
       return;
     }
-    if (! localStream) {
+    if (!localStream) {
       console.error('no local stream, please start video.');
       return;
     }
@@ -190,7 +200,7 @@
       } else {
         console.log('empty ice event. SDP ready to send');
         const sdp = await peer.localDescription;
- 
+
         // // --- send sdp ---
         // console.log('--- sending sdp with WHIP---');
         // await sendWHIP(sdp.sdp);
@@ -231,13 +241,11 @@
       transceiver.direction = 'sendonly';
       if (transceiver.sender.track.kind === 'video') {
         console.log('---- video track transeiver ----');
-        //checkSenderParams(transceiver.sender);
-        setupVideoCodecs(transceiver);
+        //setupVideoCodecs(transceiver);
       }
-      else if(transceiver.sender.track.kind === 'audio') {
+      else if (transceiver.sender.track.kind === 'audio') {
         console.log('---- audio track transeiver ----');
-        //checkSenderParams(transceiver.sender);
-        setupAudioCodecs(transceiver);
+        //setupAudioCodecs(transceiver);
       }
       else {
         console.warn('unknown track');
@@ -253,10 +261,24 @@
     // --- wait to complete ICE candidate ---
     const desc = await waitToCompleteICEGathering(peer);
     console.log('waitToCompleteICEGathering() succsess. local SDP:', desc.sdp);
-    
+
     // --- send sdp ---
     console.log('--- sending sdp with WHIP---');
-    await sendWHIP(desc.sdp);
+    //await sendWHIP(desc.sdp);
+    const URL_GATEWAY = '/whipgw';
+    const endpoint = getWhipEndpoint();
+    const token = getAuthToken();
+    const answerSDP = await exchangeSdpWithGateway(desc.sdp, URL_GATEWAY, endpoint, token, setWhipResouce);
+    if (answerSDP) {
+      const answer = new RTCSessionDescription({ type: "answer", sdp: answerSDP });
+      await peer.setRemoteDescription(answer);
+    }
+    else {
+      // some error
+      peer.close();
+      peer = null;
+    }
+    updateUI();
   }
 
   // refer cloudflare example
@@ -285,7 +307,7 @@
 
       // --- use H.264 ---
       transceiver.setCodecPreferences(h264Codecs); // NOT supported in Firefox
-  
+
       /*--
       // -use 1st H.264 only --
       const h264Codec1 = [];
@@ -346,8 +368,9 @@
   const URL_GATEWAY = '/whipgw';
 
 
-  let whipResource;
+  let whipResource = '';
 
+  /*----
   async function sendWHIP(sdp) {
     const endpoint = getWhipEndpoint();
     const token = getAuthToken();
@@ -357,20 +380,20 @@
     headers.set("Content-Type", "application/sdp");
     headers.set("Authorization", 'Bearer ' + token);
     headers.set("X-Whip-Endpoint", endpoint);
- 
+
     opt.method = 'POST';
     opt.headers = headers;
     opt.body = sdp;
     opt.keepalive = true;
 
     const res = await fetch(URL_GATEWAY, opt)
-    .catch(e => {
-      console.error(e);
-      return {
-        role: 'error',
-        content: 'Network ERROR, Please try again.',
-      };
-    });
+      .catch(e => {
+        console.error(e);
+        return {
+          role: 'error',
+          content: 'Network ERROR, Please try again.',
+        };
+      });
 
     console.log('WHIP response:', res);
     if (res.status === 400) {
@@ -394,23 +417,28 @@
       console.warn('200 OK, but not expected.');
     }
   }
+  ----*/
 
   // --- disconnect 2 peers ---
   async function stopPeer() {
-    if (whipResource) {
+    const resoruce = getWhipResoruce();
+    if (resoruce && resoruce.length > 0) {
       console.log('--- disconnect ---');
-      await requestDelete(whipResource);
+      const URL_DELETE = '/whipdelete';
+      const endpoint = getWhipEndpoint();
+      const token = getAuthToken();
+      await requestDeleteResouceWithGatway(whipResource, URL_DELETE, endpoint, token);
       console.log('disconnect response:');
       if (peer) {
         peer.close();
         peer = null;
       }
-      whipResource = null;
-
+      setWhipResouce('');
       updateUI();
     }
   }
 
+  /*--
   //const URL_DELETE = 'http://localhost:3000/whipdelete';
   const URL_DELETE = '/whipdelete';
   async function requestDelete(resource) {
@@ -452,9 +480,11 @@
     const fullResource = protocol + '//' + host + resource;
     return fullResource;
   }
+  ---*/
 
   // ========= init UI ==========
   updateUI();
   setupInputs();
 </script>
+
 </html>
