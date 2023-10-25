@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <title>WHIP Direct</title>
   <script src="js/whipwhep_helper.js"></script>
+  <script src="js/ui_helper.js"></script>
 </head>
 
 <body>
@@ -87,37 +88,14 @@
     document.getElementById('whip_recource').value = getWhipResoruce();
   }
 
-
-  function enableElementById(id) {
-    const element = document.getElementById(id);
-    element.disabled = false;
-  }
-
-  function disableElementById(id) {
-    const element = document.getElementById(id);
-    element.disabled = true;
-  }
-
   // ---- URL ----
   function getEndpointFromUrl() {
-    const search = window.location.search;
-    const re = new RegExp('endpoint=([^&=]+)');
-    const results = re.exec(search);
-    let endpoint = '';
-    if (results) {
-      endpoint = results[1];
-    }
+    const endpoint = getParamFromQueryString('endpoint');
     return endpoint;
   }
 
   function getTokenFromUrl() {
-    const search = window.location.search;
-    const re = new RegExp('token=([^&=]+)');
-    const results = re.exec(search);
-    let token = '';
-    if (results) {
-      token = results[1];
-    }
+    const token = getParamFromQueryString('token');
     return token;
   }
 
